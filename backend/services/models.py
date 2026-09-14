@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 import time
 from typing import Any, Optional
 
@@ -327,6 +328,7 @@ def build_comparison_model(
 
 
 _guardrail_singleton: Optional[GuardrailModel] = None
+_guardrail_lock = threading.Lock()
 
 
 def get_guardrail_model() -> GuardrailModel:
@@ -335,17 +337,25 @@ def get_guardrail_model() -> GuardrailModel:
     The underlying ``llm_guard`` model loads weights on construction, so we keep
     one instance per process and publish it to Weave on first use (so the Models
     tab shows it even before the first trace).
+
+    The lock is load-bearing: FastAPI resolves this dependency in its threadpool,
+    and the frontend sends one request per image in parallel. Concurrent
+    transformers loads corrupt torch's global meta-device init state — every
+    load in the process fails with "Cannot copy out of meta tensor" from then
+    on — so the first construction must be serialized.
     """
     global _guardrail_singleton
     if _guardrail_singleton is None:
-        logger.info(
-            "Loading GuardrailModel (first use, model download may take a moment)..."
-        )
-        _guardrail_singleton = GuardrailModel()
-        try:
-            weave.publish(_guardrail_singleton, name="guardrail-model")
-        except Exception as exc:
-            logger.warning("weave.publish failed for guardrail: %s", exc)
+        with _guardrail_lock:
+            if _guardrail_singleton is None:
+                logger.info(
+                    "Loading GuardrailModel (first use, model download may take a moment)..."
+                )
+                _guardrail_singleton = GuardrailModel()
+                try:
+                    weave.publish(_guardrail_singleton, name="guardrail-model")
+                except Exception as exc:
+                    logger.warning("weave.publish failed for guardrail: %s", exc)
     return _guardrail_singleton
 
 
