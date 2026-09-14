@@ -20,17 +20,17 @@ WANDB_INFERENCE_BASE_URL = "https://api.inference.wandb.ai/v1"
 # and is sent verbatim to the frontend so the credentials modal can render the
 # dropdown without hardcoding labels.
 AVAILABLE_MODELS: dict[str, str] = {
-    "moonshotai/Kimi-K2.5": "Kimi K2.5",
+    "moonshotai/Kimi-K2.6": "Kimi K2.6",
     "google/gemma-4-31B-it": "Gemma 4 31B",
-    "Qwen/Qwen3.5-35B-A3B": "Qwen 3.5 35B A3B",
+    "Qwen/Qwen3.6-35B-A3B": "Qwen 3.6 35B A3B",
 }
-DEFAULT_MODEL = "moonshotai/Kimi-K2.5"
+DEFAULT_MODEL = "moonshotai/Kimi-K2.6"
 
 # W&B Inference rejects very large base64-encoded image payloads ("ext_proc failed").
 # Resize images so the longest edge is at most this many pixels before sending.
 MAX_IMAGE_DIMENSION = 1600
 
-# Gemma 4 and Qwen 3.5 emit long reasoning traces before producing the final
+# Gemma 4 and Qwen 3.6 emit long reasoning traces before producing the final
 # content. The OpenAI client surfaces only `message.content`, but reasoning
 # still consumes token budget, so we set a generous ceiling here.
 MAX_OUTPUT_TOKENS = 32768

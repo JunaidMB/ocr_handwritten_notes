@@ -51,7 +51,7 @@ WANDB_API_KEY=             # required — authenticates W&B Inference (+ Weave w
 ENTITY=                    # required ONLY when WEAVE_TRACING_ENABLED=true
 PROJECT=                   # required ONLY when WEAVE_TRACING_ENABLED=true
 WEAVE_TRACING_ENABLED=     # optional, default false. Master toggle for traces + dataset capture.
-MODEL=                     # optional — defaults to moonshotai/Kimi-K2.5
+MODEL=                     # optional — defaults to moonshotai/Kimi-K2.6
 LIKHO_DATASET_NAME=        # optional — overrides the default likho-ocr-captures
 ```
 
@@ -65,9 +65,9 @@ Pick whichever fits your page. Switch any time from the gear icon.
 
 | Model | Notes |
 | --- | --- |
-| `moonshotai/Kimi-K2.5` *(default)* | Fastest. Great on clean, well-lit pages. |
+| `moonshotai/Kimi-K2.6` *(default)* | Fastest. Great on clean, well-lit pages. |
 | `google/gemma-4-31B-it` | More careful on dense or messy handwriting; slower. |
-| `Qwen/Qwen3.5-35B-A3B` | Strong on structured layouts (tables, multi-column). |
+| `Qwen/Qwen3.6-35B-A3B` | Strong on structured layouts (tables, multi-column). |
 
 All three are served by W&B Inference — see the [model catalog](https://docs.wandb.ai/guides/inference/) for the latest list.
 
@@ -81,7 +81,7 @@ A single W&B API key powers four integrations. **W&B Inference always runs; the 
 
 ### 1. W&B Inference — the model serving the OCR (always on)
 
-The vision LLM call goes to `https://api.inference.wandb.ai/v1` via the standard `openai` Python SDK with `base_url` overridden. No OpenAI account needed; the W&B key authenticates everything. Three vision models are exposed (Kimi-K2.5, Gemma 4 31B, Qwen 3.5 35B) and selected at runtime from the credentials modal.
+The vision LLM call goes to `https://api.inference.wandb.ai/v1` via the standard `openai` Python SDK with `base_url` overridden. No OpenAI account needed; the W&B key authenticates everything. Three vision models are exposed (Kimi K2.6, Gemma 4 31B, Qwen 3.6 35B) and selected at runtime from the credentials modal.
 
 → Code: `backend/services/models.py` — `OCRModel(weave.Model)` builds an `AsyncOpenAI` client in its `PrivateAttr` and calls W&B Inference inside `@weave.op async def predict(...)`. The client construction and the OCR helpers live in `backend/services/inference_service.py` (`build_ocr_model`, `OCR_RESPONSE_FORMAT`, `maybe_downscale`, `clean_markdown`).
 → Docs: [W&B Inference](https://docs.wandb.ai/guides/inference/)
