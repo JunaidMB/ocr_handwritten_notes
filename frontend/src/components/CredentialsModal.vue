@@ -143,7 +143,7 @@ function handleCancel() {
           </option>
         </select>
         <p style="font-size: 12px; color: var(--color-text-muted); margin: 6px 0 0 0;">
-          Kimi is fastest. Gemma and Qwen may be more accurate on dense pages.
+          Kimi and GLM Flash are fastest. Gemma and Qwen may be more accurate on dense pages.
         </p>
       </div>
 

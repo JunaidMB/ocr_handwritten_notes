@@ -65,9 +65,11 @@ Pick whichever fits your page. Switch any time from the gear icon.
 
 | Model | Notes |
 | --- | --- |
-| `moonshotai/Kimi-K2.6` *(default)* | Fastest. Great on clean, well-lit pages. |
+| `moonshotai/Kimi-K2.6` *(default)* | Fast, general-purpose. Great on clean, well-lit pages. |
+| `zai-org/GLM-5.3-Flash` | Lightweight flash tier — quickest option for simple pages. |
 | `google/gemma-4-31B-it` | More careful on dense or messy handwriting; slower. |
-| `Qwen/Qwen3.6-35B-A3B` | Strong on structured layouts (tables, multi-column). |
+| `Qwen/Qwen3.8-27B` | Dense multimodal model; strong on structured layouts (tables, multi-column). |
+| `MiniMaxAI/MiniMax-M3` | General multimodal MoE — a different family worth comparing. |
 
 All three are served by W&B Inference — see the [model catalog](https://docs.wandb.ai/guides/inference/) for the latest list.
 
@@ -81,7 +83,7 @@ A single W&B API key powers four integrations. **W&B Inference always runs; the 
 
 ### 1. W&B Inference — the model serving the OCR (always on)
 
-The vision LLM call goes to `https://api.inference.wandb.ai/v1` via the standard `openai` Python SDK with `base_url` overridden. No OpenAI account needed; the W&B key authenticates everything. Three vision models are exposed (Kimi K2.6, Gemma 4 31B, Qwen 3.6 35B) and selected at runtime from the credentials modal.
+The vision LLM call goes to `https://api.inference.wandb.ai/v1` via the standard `openai` Python SDK with `base_url` overridden. No OpenAI account needed; the W&B key authenticates everything. Five vision models are exposed (Kimi K2.6, GLM 5.3 Flash, Gemma 4 31B, Qwen 3.8 27B, MiniMax M3) and selected at runtime from the credentials modal.
 
 → Code: `backend/services/models.py` — `OCRModel(weave.Model)` builds an `AsyncOpenAI` client in its `PrivateAttr` and calls W&B Inference inside `@weave.op async def predict(...)`. The client construction and the OCR helpers live in `backend/services/inference_service.py` (`build_ocr_model`, `OCR_RESPONSE_FORMAT`, `maybe_downscale`, `clean_markdown`).
 → Docs: [W&B Inference](https://docs.wandb.ai/guides/inference/)

@@ -21,8 +21,10 @@ WANDB_INFERENCE_BASE_URL = "https://api.inference.wandb.ai/v1"
 # dropdown without hardcoding labels.
 AVAILABLE_MODELS: dict[str, str] = {
     "moonshotai/Kimi-K2.6": "Kimi K2.6",
+    "zai-org/GLM-5.3-Flash": "GLM 5.3 Flash",
     "google/gemma-4-31B-it": "Gemma 4 31B",
-    "Qwen/Qwen3.6-35B-A3B": "Qwen 3.6 35B A3B",
+    "Qwen/Qwen3.8-27B": "Qwen 3.8 27B",
+    "MiniMaxAI/MiniMax-M3": "MiniMax M3",
 }
 DEFAULT_MODEL = "moonshotai/Kimi-K2.6"
 
@@ -30,9 +32,9 @@ DEFAULT_MODEL = "moonshotai/Kimi-K2.6"
 # Resize images so the longest edge is at most this many pixels before sending.
 MAX_IMAGE_DIMENSION = 1600
 
-# Gemma 4 and Qwen 3.6 emit long reasoning traces before producing the final
-# content. The OpenAI client surfaces only `message.content`, but reasoning
-# still consumes token budget, so we set a generous ceiling here.
+# Several catalog models (e.g. Gemma 4, Qwen) emit long reasoning traces before
+# producing the final content. The OpenAI client surfaces only `message.content`,
+# but reasoning still consumes token budget, so we set a generous ceiling here.
 MAX_OUTPUT_TOKENS = 32768
 
 
