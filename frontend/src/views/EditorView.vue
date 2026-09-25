@@ -16,7 +16,6 @@ const documentTitle = ref('Untitled Document')
 const scrollRef = ref(null)
 const sectionRefs = []
 const lightboxIndex = ref(null)
-const originalOcrSnapshot = ref([])
 const imageHeights = ref({})
 let imageObserver = null
 
@@ -134,7 +133,6 @@ onMounted(() => {
     router.push('/')
     return
   }
-  originalOcrSnapshot.value = notesStore.results.map(r => r.markdown)
   document.addEventListener('keydown', onGlobalKeydown)
   window.addEventListener('resize', remeasureImages)
 
@@ -242,6 +240,12 @@ function openLightbox(i) {
   lightboxIndex.value = i
 }
 
+function handleDelete(i) {
+  if (!window.confirm('Delete this page? This cannot be undone.')) return
+  notesStore.removeResult(i)
+  if (notesStore.results.length === 0) router.push('/')
+}
+
 function openDownloadModal() {
   showDownloadModal.value = true
 }
@@ -259,7 +263,7 @@ function performDownload(sendToDataset) {
       image_filename: r.filename,
       image_base64: (r.preview || '').split(',')[1] || '',
       markdown: notesStore.stripImageTagsForDataset(r.markdown),
-      original_ocr: originalOcrSnapshot.value[i] ?? '',
+      original_ocr: r._originalOcr ?? r.markdown ?? '',
       options: {
         contains_latex: notesStore.options.containsLatex,
         contains_diagrams: notesStore.options.containsDiagrams,
@@ -344,8 +348,7 @@ async function processAddImages() {
         ...response,
         preview: image.preview
       }
-      notesStore.results.push(newResult)
-      originalOcrSnapshot.value.push(newResult.markdown)
+      notesStore.addResult(newResult)
     }
 
     showAddModal.value = false
@@ -459,21 +462,83 @@ function closeAddModal() {
         <!-- Sections (one per image) -->
         <section
           v-for="(result, i) in notesStore.results"
-          :key="result.filename + '-' + i"
+          :key="result._uid"
           style="display: flex; gap: 20px; margin-bottom: 16px; align-items: stretch;"
         >
           <!-- Gutter: sticky thumbnail -->
           <div style="width: 560px; flex-shrink: 0;">
             <div style="position: sticky; top: 16px;">
-              <img
-                :src="result.preview"
-                :alt="result.filename"
-                :title="result.filename"
-                :data-section-image="i"
-                @click="openLightbox(i)"
-                @load="onImageLoad(i, $event)"
-                style="width: 100%; height: auto; max-height: 85vh; object-fit: contain; cursor: zoom-in; border-radius: 6px; border: 1px solid var(--color-border); display: block; transition: opacity 150ms;"
-              />
+              <div style="position: relative;">
+                <img
+                  :src="result.preview"
+                  :alt="result.filename"
+                  :title="result.filename"
+                  :data-section-image="i"
+                  @click="openLightbox(i)"
+                  @load="onImageLoad(i, $event)"
+                  style="width: 100%; height: auto; max-height: 85vh; object-fit: contain; cursor: zoom-in; border-radius: 6px; border: 1px solid var(--color-border); display: block; transition: opacity 150ms;"
+                />
+                <button
+                  @click.stop="notesStore.swapResults(i, i - 1)"
+                  :disabled="i === 0"
+                  :style="{
+                    position: 'absolute',
+                    top: '8px',
+                    left: '8px',
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                    color: 'white',
+                    border: 'none',
+                    cursor: i === 0 ? 'not-allowed' : 'pointer',
+                    opacity: i === 0 ? 0.35 : 1
+                  }"
+                  aria-label="Move page up"
+                  title="Move page up"
+                >
+                  &uarr;
+                </button>
+                <button
+                  @click.stop="notesStore.swapResults(i, i + 1)"
+                  :disabled="i === notesStore.results.length - 1"
+                  :style="{
+                    position: 'absolute',
+                    top: '38px',
+                    left: '8px',
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                    color: 'white',
+                    border: 'none',
+                    cursor: i === notesStore.results.length - 1 ? 'not-allowed' : 'pointer',
+                    opacity: i === notesStore.results.length - 1 ? 0.35 : 1
+                  }"
+                  aria-label="Move page down"
+                  title="Move page down"
+                >
+                  &darr;
+                </button>
+                <button
+                  @click.stop="handleDelete(i)"
+                  style="position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background-color: rgba(0, 0, 0, 0.6); color: white; border: none; cursor: pointer;"
+                  @mouseenter="$event.currentTarget.style.backgroundColor = '#ef4444'"
+                  @mouseleave="$event.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.6)'"
+                  aria-label="Delete page"
+                  title="Delete page"
+                >
+                  <svg style="width: 12px; height: 12px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
 

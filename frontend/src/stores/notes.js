@@ -74,7 +74,48 @@ export const useNotesStore = defineStore('notes', () => {
   }
 
   function setResults(newResults) {
-    results.value = newResults
+    results.value = newResults.map(r => ({
+      ...r,
+      _uid: r._uid ?? crypto.randomUUID(),
+      _originalOcr: r._originalOcr ?? r.markdown
+    }))
+  }
+
+  function addResult(result) {
+    results.value.push({
+      ...result,
+      _uid: result._uid ?? crypto.randomUUID(),
+      _originalOcr: result._originalOcr ?? result.markdown
+    })
+  }
+
+  function removeResult(index) {
+    results.value.splice(index, 1)
+    for (const id in crops.value) {
+      const crop = crops.value[id]
+      if (crop.sourceIndex === index) {
+        crop.sourceIndex = -1
+      } else if (crop.sourceIndex > index) {
+        crop.sourceIndex -= 1
+      }
+    }
+  }
+
+  function swapResults(a, b) {
+    if (a === b) return
+    const len = results.value.length
+    if (a < 0 || b < 0 || a >= len || b >= len) return
+    const tmp = results.value[a]
+    results.value[a] = results.value[b]
+    results.value[b] = tmp
+    for (const id in crops.value) {
+      const crop = crops.value[id]
+      if (crop.sourceIndex === a) {
+        crop.sourceIndex = b
+      } else if (crop.sourceIndex === b) {
+        crop.sourceIndex = a
+      }
+    }
   }
 
   function setProcessing(value) {
@@ -190,7 +231,9 @@ export const useNotesStore = defineStore('notes', () => {
     results.value = [{
       filename: sampleFilename,
       markdown: sampleMarkdown,
-      preview: sampleImage
+      preview: sampleImage,
+      _uid: crypto.randomUUID(),
+      _originalOcr: sampleMarkdown
     }]
   }
 
@@ -210,6 +253,9 @@ export const useNotesStore = defineStore('notes', () => {
     clearImages,
     updateMarkdown,
     setResults,
+    addResult,
+    removeResult,
+    swapResults,
     setProcessing,
     setCurrentImageIndex,
     setError,
