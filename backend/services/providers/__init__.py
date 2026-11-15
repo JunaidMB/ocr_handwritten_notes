@@ -3,6 +3,7 @@ from typing import Optional
 from backend.services.credentials import CredentialStore
 from backend.services.providers.anthropic_provider import AnthropicProvider
 from backend.services.providers.base import (
+    EditOutput,
     OCROutput,
     OCRProvider,
     ProviderError,
@@ -57,6 +58,7 @@ __all__ = [
     "SUPPORTED_PROVIDERS",
     "OCRProvider",
     "OCROutput",
+    "EditOutput",
     "ProviderError",
     "ProviderTimeoutError",
     "ProviderUnreachableError",

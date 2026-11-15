@@ -1,7 +1,9 @@
 from openai import APIConnectionError, APIStatusError, APITimeoutError, AsyncOpenAI
 
+from backend.prompts.edit_prompts import build_edit_prompt
 from backend.prompts.ocr_prompts import build_ocr_prompt
 from backend.services.providers.base import (
+    EditOutput,
     OCROutput,
     OCRProvider,
     ProviderError,
@@ -60,3 +62,26 @@ class OpenAIProvider(OCRProvider):
         result = response.choices[0].message.parsed
         markdown = result.markdown if result else ""
         return clean_markdown(markdown)
+
+    async def edit_text(self, text: str, instruction: str) -> str:
+        system, user = build_edit_prompt(instruction, text)
+        try:
+            response = await self.client.beta.chat.completions.parse(
+                model=MODEL,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+                response_format=EditOutput,
+                max_tokens=4096,
+            )
+        except APITimeoutError as e:
+            raise ProviderTimeoutError(f"OpenAI timed out: {e}") from e
+        except APIConnectionError as e:
+            raise ProviderUnreachableError(f"Could not reach OpenAI: {e}") from e
+        except APIStatusError as e:
+            msg = getattr(e, "message", None) or str(e)
+            raise ProviderError(msg, status_code=e.status_code, code="openai_error") from e
+
+        result = response.choices[0].message.parsed
+        return result.edited_text if result else ""

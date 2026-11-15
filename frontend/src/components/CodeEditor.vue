@@ -58,7 +58,10 @@ onMounted(() => {
       ]),
       EditorView.updateListener.of((u) => {
         if (u.docChanged) emit('update:modelValue', u.state.doc.toString())
-        if (u.selectionSet) emit('select', u.state.selection.main.head)
+        if (u.selectionSet) {
+          const sel = u.state.selection.main
+          emit('select', { head: sel.head, from: sel.from, to: sel.to })
+        }
       }),
     ],
   })
@@ -109,7 +112,36 @@ function getLength() {
   return view ? view.state.doc.length : 0
 }
 
-defineExpose({ focus, focusAtStart, focusAtEnd, insertAtCursor, scrollIntoView, getLength })
+function getSelection() {
+  if (!view) return { from: 0, to: 0, text: '', isEmpty: true }
+  const sel = view.state.selection.main
+  return {
+    from: sel.from,
+    to: sel.to,
+    text: view.state.sliceDoc(sel.from, sel.to),
+    isEmpty: sel.empty,
+  }
+}
+
+function replaceRange(from, to, text) {
+  if (!view) return
+  view.dispatch({
+    changes: { from, to, insert: text },
+    selection: { anchor: from + text.length },
+  })
+  view.focus()
+}
+
+defineExpose({
+  focus,
+  focusAtStart,
+  focusAtEnd,
+  insertAtCursor,
+  scrollIntoView,
+  getLength,
+  getSelection,
+  replaceRange,
+})
 </script>
 
 <template>

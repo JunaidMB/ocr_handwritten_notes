@@ -8,6 +8,7 @@ import katex from 'katex'
 import DropZone from '../components/DropZone.vue'
 import CropModal from '../components/CropModal.vue'
 import CodeEditor from '../components/CodeEditor.vue'
+import EditWithAIModal from '../components/EditWithAIModal.vue'
 import { processSingleImage } from '../services/api'
 
 const router = useRouter()
@@ -73,6 +74,39 @@ function openCropModal() {
     cursorState.value = { index: 0, position: sectionRefs[0]?.getLength?.() ?? 0 }
   }
   showCropModal.value = true
+}
+
+// Edit with AI modal state
+const showEditModal = ref(false)
+const editModalSelection = ref(null)
+
+function openEditModal() {
+  const idx = cursorState.value.index
+  const sel = sectionRefs[idx]?.getSelection?.()
+  if (sel && !sel.isEmpty) {
+    editModalSelection.value = { pageIndex: idx, from: sel.from, to: sel.to, text: sel.text }
+  } else {
+    editModalSelection.value = null
+  }
+  showEditModal.value = true
+}
+
+function handleApplyEdit(payload) {
+  for (const item of payload) {
+    if (item.from == null) {
+      notesStore.updateMarkdown(item.pageIndex, item.newText)
+    } else {
+      const editor = sectionRefs[item.pageIndex]
+      if (editor?.replaceRange) {
+        editor.replaceRange(item.from, item.to, item.newText)
+      } else {
+        const current = notesStore.results[item.pageIndex]?.markdown ?? ''
+        const next = current.slice(0, item.from) + item.newText + current.slice(item.to)
+        notesStore.updateMarkdown(item.pageIndex, next)
+      }
+    }
+  }
+  showEditModal.value = false
 }
 
 function focusPrevEditor(i) {
@@ -330,6 +364,19 @@ function closeAddModal() {
           </svg>
           Add Diagrams
         </button>
+        <button
+          v-if="notesStore.results.length >= 1"
+          @click="openEditModal"
+          style="padding: 8px 16px; font-size: 14px; border-radius: 6px; background: transparent; border: 1px solid var(--color-border); cursor: pointer; color: var(--color-text-primary); display: flex; align-items: center; gap: 6px;"
+          @mouseenter="$event.target.style.backgroundColor = 'var(--color-surface-hover)'"
+          @mouseleave="$event.target.style.backgroundColor = 'transparent'"
+          title="Edit text with AI"
+        >
+          <svg style="width: 16px; height: 16px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 3v4M3 5h4M6 17v4M4 19h4M13 3l3 7 7 3-7 3-3 7-3-7-7-3 7-3z" />
+          </svg>
+          Edit with AI
+        </button>
       </div>
 
       <div style="display: flex; align-items: center; gap: 4px; background-color: var(--color-bg); border-radius: 8px; padding: 4px;">
@@ -474,7 +521,7 @@ function closeAddModal() {
               placeholder="Edit OCR text..."
               :min-height="imageHeights[i] ? imageHeights[i] + 'px' : '75vh'"
               @update:model-value="notesStore.updateMarkdown(i, $event)"
-              @select="cursorState = { index: i, position: $event }"
+              @select="cursorState = { index: i, position: $event.head }"
               @arrow-up-out="focusPrevEditor(i)"
               @arrow-down-out="focusNextEditor(i)"
             />
@@ -510,6 +557,17 @@ function closeAddModal() {
       :initial-index="cursorState.index"
       @close="showCropModal = false"
       @insert-at-cursor="handleInsertAtCursor"
+    />
+
+    <!-- Edit with AI Modal -->
+    <EditWithAIModal
+      v-if="showEditModal && notesStore.results.length > 0"
+      :pages="notesStore.results"
+      :current-page-index="cursorState.index"
+      :current-selection="editModalSelection"
+      :provider="configStore.selectedProvider"
+      @close="showEditModal = false"
+      @apply="handleApplyEdit"
     />
 
     <!-- Lightbox overlay -->

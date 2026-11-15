@@ -1,11 +1,14 @@
 import base64
+import json
 
 from google import genai
 from google.genai import errors as genai_errors
 from google.genai import types
 
+from backend.prompts.edit_prompts import build_edit_prompt
 from backend.prompts.ocr_prompts import build_ocr_prompt
 from backend.services.providers.base import (
+    EditOutput,
     OCROutput,
     OCRProvider,
     ProviderError,
@@ -62,3 +65,35 @@ class GeminiProvider(OCRProvider):
             markdown = getattr(response, "text", "") or ""
 
         return clean_markdown(markdown)
+
+    async def edit_text(self, text: str, instruction: str) -> str:
+        system, user = build_edit_prompt(instruction, text)
+        try:
+            response = await self.client.aio.models.generate_content(
+                model=MODEL,
+                contents=[user],
+                config=types.GenerateContentConfig(
+                    system_instruction=system,
+                    response_mime_type="application/json",
+                    response_schema=EditOutput,
+                    max_output_tokens=4096,
+                ),
+            )
+        except genai_errors.ClientError as e:
+            status = getattr(e, "code", None) or getattr(e, "status_code", None) or 400
+            raise ProviderError(str(e), status_code=int(status), code="gemini_error") from e
+        except genai_errors.ServerError as e:
+            raise ProviderUnreachableError(f"Gemini server error: {e}") from e
+        except genai_errors.APIError as e:
+            raise ProviderError(str(e), status_code=502, code="gemini_error") from e
+
+        parsed = getattr(response, "parsed", None)
+        if isinstance(parsed, EditOutput):
+            return parsed.edited_text
+        if isinstance(parsed, dict):
+            return parsed.get("edited_text", "") or ""
+        raw = getattr(response, "text", "") or ""
+        try:
+            return json.loads(raw).get("edited_text", "") or ""
+        except (ValueError, AttributeError):
+            return raw

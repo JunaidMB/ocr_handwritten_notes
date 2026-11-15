@@ -52,6 +52,22 @@ export async function processSingleImage(image, options) {
   return data
 }
 
+export async function editText({ text, instruction, provider }) {
+  const formData = new FormData()
+  formData.append('text', text)
+  formData.append('instruction', instruction)
+  if (provider) formData.append('provider', provider)
+
+  const response = await fetch(`${API_BASE}/edit/text`, {
+    method: 'POST',
+    body: formData
+  })
+
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) throwApiError(response, data, 'Edit request failed')
+  return data
+}
+
 export async function fetchLocalModels({ baseUrl, apiKey }) {
   const response = await fetch(`${API_BASE}/config/local/models`, {
     method: 'POST',

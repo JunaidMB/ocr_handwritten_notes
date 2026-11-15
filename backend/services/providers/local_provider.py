@@ -1,9 +1,11 @@
 import logging
+import re
 import time
 
 import httpx
 from openai import NOT_GIVEN, APIConnectionError, APIStatusError, APITimeoutError, AsyncOpenAI
 
+from backend.prompts.edit_prompts import build_edit_prompt
 from backend.prompts.ocr_prompts import build_ocr_prompt
 from backend.services.providers.base import (
     OCRProvider,
@@ -11,6 +13,11 @@ from backend.services.providers.base import (
     ProviderTimeoutError,
     ProviderUnreachableError,
     clean_markdown,
+)
+
+_EDIT_PREAMBLE_RE = re.compile(
+    r"^\s*(here(?:'s| is)[^\n:]*:?|edited text:?|the edited text:?)\s*\n+",
+    re.IGNORECASE,
 )
 
 logger = logging.getLogger(__name__)
@@ -152,3 +159,44 @@ class LocalProvider(OCRProvider):
                 "transcription may be incomplete"
             )
         return clean_markdown(markdown)
+
+    async def edit_text(self, text: str, instruction: str) -> str:
+        system, user = build_edit_prompt(instruction, text)
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ]
+        try:
+            try:
+                response = await self.client.chat.completions.create(
+                    model=self.model, messages=messages, max_tokens=MAX_OUTPUT_TOKENS
+                )
+            except APIStatusError as e:
+                if not _is_budget_rejection(e):
+                    raise
+                response = await self.client.chat.completions.create(
+                    model=self.model, messages=messages, max_tokens=NOT_GIVEN
+                )
+        except APITimeoutError as e:
+            raise ProviderTimeoutError(
+                f"Your local model server at {self.base_url} timed out after "
+                f"{REQUEST_TIMEOUT_SECONDS}s."
+            ) from e
+        except APIConnectionError as e:
+            raise ProviderUnreachableError(
+                f"Could not reach your local model server at {self.base_url} — is it running?"
+            ) from e
+        except APIStatusError as e:
+            if e.status_code == 404:
+                raise ProviderError(
+                    f"Model '{self.model}' was not found on your local server at "
+                    f"{self.base_url}.",
+                    status_code=404,
+                    code="local_model_not_found",
+                ) from e
+            msg = getattr(e, "message", None) or str(e)
+            raise ProviderError(msg, status_code=e.status_code, code="local_error") from e
+
+        content = response.choices[0].message.content or ""
+        content = _EDIT_PREAMBLE_RE.sub("", content).strip()
+        return content

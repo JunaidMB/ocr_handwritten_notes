@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.routers import config, ocr
+from backend.routers import config, edit, ocr
 
 app = FastAPI(
     title="OCR Notes API",
@@ -24,6 +24,7 @@ app.add_middleware(
 
 app.include_router(ocr.router, prefix="/api/v1")
 app.include_router(config.router, prefix="/api/v1")
+app.include_router(edit.router, prefix="/api/v1")
 
 
 @app.get("/api/v1/health")

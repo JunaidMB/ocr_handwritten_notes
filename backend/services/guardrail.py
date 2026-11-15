@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
+from fastapi import HTTPException
 from llm_guard.input_scanners import PromptInjection
 from llm_guard.input_scanners.prompt_injection import MatchType
 
@@ -55,3 +56,29 @@ def get_guardrail() -> Guardrail:
         )
         _guardrail_singleton = Guardrail()
     return _guardrail_singleton
+
+
+def enforce_guardrail(text: str) -> None:
+    """Run the prompt-injection check on user text; raise 400 if it fails.
+
+    No-op when text is empty. Fails open (allows) if the scanner errors.
+    """
+    if not text or not text.strip():
+        return
+    verdict = get_guardrail().scan(text)
+    if not verdict.get("passed", True):
+        logger.warning(
+            "Prompt injection detected (risk=%.3f) — rejecting request",
+            verdict.get("risk_score", 0.0),
+        )
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "prompt_injection_detected",
+                "message": (
+                    "Custom instructions appear to contain a prompt-injection "
+                    "attempt. Edit and retry."
+                ),
+                "risk_score": verdict.get("risk_score", 0.0),
+            },
+        )

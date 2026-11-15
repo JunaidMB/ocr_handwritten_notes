@@ -1,5 +1,8 @@
+import re
+
 from mistralai import Mistral
 
+from backend.prompts.edit_prompts import build_edit_prompt
 from backend.prompts.ocr_prompts import build_ocr_prompt
 from backend.services.providers.base import (
     OCRProvider,
@@ -8,6 +11,11 @@ from backend.services.providers.base import (
 )
 
 MODEL = "mistral-medium-latest"
+
+_EDIT_PREAMBLE_RE = re.compile(
+    r"^\s*(here(?:'s| is)[^\n:]*:?|edited text:?|the edited text:?)\s*\n+",
+    re.IGNORECASE,
+)
 
 
 class MistralProvider(OCRProvider):
@@ -57,3 +65,28 @@ class MistralProvider(OCRProvider):
                 for part in markdown
             )
         return clean_markdown(markdown)
+
+    async def edit_text(self, text: str, instruction: str) -> str:
+        system, user = build_edit_prompt(instruction, text)
+        try:
+            response = await self.client.chat.complete_async(
+                model=MODEL,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+                max_tokens=4096,
+            )
+        except Exception as e:
+            status = getattr(e, "status_code", None) or 502
+            message = getattr(e, "message", None) or str(e)
+            raise ProviderError(message, status_code=int(status), code="mistral_error") from e
+
+        content = response.choices[0].message.content or ""
+        if isinstance(content, list):
+            content = "".join(
+                part.get("text", "") if isinstance(part, dict) else getattr(part, "text", "")
+                for part in content
+            )
+        content = _EDIT_PREAMBLE_RE.sub("", content).strip()
+        return content

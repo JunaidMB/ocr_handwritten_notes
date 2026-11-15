@@ -9,6 +9,11 @@ class OCROutput(BaseModel):
     markdown: str
 
 
+class EditOutput(BaseModel):
+    """Structured output schema for text-edit responses."""
+    edited_text: str
+
+
 class ProviderError(Exception):
     """Provider-agnostic error with HTTP status hint and stable code."""
 
@@ -48,4 +53,8 @@ class OCRProvider(ABC):
         contains_diagrams: bool,
         custom_instructions: str = "",
     ) -> str:
+        ...
+
+    @abstractmethod
+    async def edit_text(self, text: str, instruction: str) -> str:
         ...

@@ -1,6 +1,7 @@
 import anthropic
 from anthropic import APIConnectionError, APIStatusError, APITimeoutError, AsyncAnthropic
 
+from backend.prompts.edit_prompts import build_edit_prompt
 from backend.prompts.ocr_prompts import build_ocr_prompt
 from backend.services.providers.base import (
     OCRProvider,
@@ -12,6 +13,7 @@ from backend.services.providers.base import (
 
 MODEL = "claude-sonnet-4-6"
 TOOL_NAME = "extract_markdown"
+EDIT_TOOL_NAME = "emit_edit"
 
 EXTRACT_TOOL = {
     "name": TOOL_NAME,
@@ -25,6 +27,18 @@ EXTRACT_TOOL = {
             }
         },
         "required": ["markdown"],
+    },
+}
+
+EDIT_TOOL = {
+    "name": EDIT_TOOL_NAME,
+    "description": "Return the edited text.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "edited_text": {"type": "string"},
+        },
+        "required": ["edited_text"],
     },
 }
 
@@ -84,3 +98,31 @@ class AnthropicProvider(OCRProvider):
                 break
 
         return clean_markdown(markdown)
+
+    async def edit_text(self, text: str, instruction: str) -> str:
+        system, user = build_edit_prompt(instruction, text)
+        try:
+            response = await self.client.messages.create(
+                model=MODEL,
+                max_tokens=4096,
+                system=system,
+                tools=[EDIT_TOOL],
+                tool_choice={"type": "tool", "name": EDIT_TOOL_NAME},
+                messages=[{"role": "user", "content": user}],
+            )
+        except APITimeoutError as e:
+            raise ProviderTimeoutError(f"Anthropic timed out: {e}") from e
+        except APIConnectionError as e:
+            raise ProviderUnreachableError(f"Could not reach Anthropic: {e}") from e
+        except APIStatusError as e:
+            msg = getattr(e, "message", None) or str(e)
+            raise ProviderError(msg, status_code=e.status_code, code="anthropic_error") from e
+        except anthropic.AnthropicError as e:
+            raise ProviderError(str(e), status_code=502, code="anthropic_error") from e
+
+        edited = ""
+        for block in response.content:
+            if getattr(block, "type", None) == "tool_use" and block.name == EDIT_TOOL_NAME:
+                edited = (block.input or {}).get("edited_text", "")
+                break
+        return edited
