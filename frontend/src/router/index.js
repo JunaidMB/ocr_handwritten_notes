@@ -1,17 +1,15 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import UploadView from '../views/UploadView.vue'
-import EditorView from '../views/EditorView.vue'
 
 const routes = [
   {
     path: '/',
     name: 'upload',
-    component: UploadView
+    component: () => import('../views/UploadView.vue')
   },
   {
     path: '/editor',
     name: 'editor',
-    component: EditorView
+    component: () => import('../views/EditorView.vue')
   }
 ]
 

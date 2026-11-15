@@ -7,6 +7,7 @@ import { marked } from 'marked'
 import katex from 'katex'
 import DropZone from '../components/DropZone.vue'
 import CropModal from '../components/CropModal.vue'
+import CodeEditor from '../components/CodeEditor.vue'
 import { processSingleImage } from '../services/api'
 
 const router = useRouter()
@@ -43,12 +44,6 @@ function setSectionRef(i, el) {
   if (el) sectionRefs[i] = el
 }
 
-function autosize(el) {
-  if (!el) return
-  el.style.height = 'auto'
-  el.style.height = el.scrollHeight + 'px'
-}
-
 function scrollRatio(el) {
   const range = el.scrollHeight - el.clientHeight
   return range > 0 ? el.scrollTop / range : 0
@@ -65,9 +60,6 @@ function setViewMode(mode) {
   viewMode.value = mode
   nextTick(() => {
     if (scrollRef.value) applyScrollRatio(scrollRef.value, ratio)
-    if (mode === 'editor') {
-      sectionRefs.forEach(autosize)
-    }
   })
 }
 
@@ -75,17 +67,22 @@ function setViewMode(mode) {
 const showCropModal = ref(false)
 const cursorState = ref({ index: 0, position: 0 })
 
-function onTextareaSelect(i, e) {
-  cursorState.value = { index: i, position: e.target.selectionStart }
-}
-
 function openCropModal() {
-  // Default cursor to end of first textarea if nothing tracked yet
-  const ta = sectionRefs[0]
-  if (ta && cursorState.value.position === 0 && cursorState.value.index === 0) {
-    cursorState.value = { index: 0, position: ta.value.length }
+  // Default cursor to end of first editor if nothing tracked yet
+  if (cursorState.value.position === 0 && cursorState.value.index === 0) {
+    cursorState.value = { index: 0, position: sectionRefs[0]?.getLength?.() ?? 0 }
   }
   showCropModal.value = true
+}
+
+function focusPrevEditor(i) {
+  const prev = sectionRefs[i - 1]
+  if (prev?.focusAtEnd) { prev.focusAtEnd(); prev.scrollIntoView?.() }
+}
+
+function focusNextEditor(i) {
+  const next = sectionRefs[i + 1]
+  if (next?.focusAtStart) { next.focusAtStart(); next.scrollIntoView?.() }
 }
 
 function handleInsertAtCursor({ refMarkdown }) {
@@ -99,14 +96,13 @@ function handleInsertAtCursor({ refMarkdown }) {
   const prefix = needsLeadingNl ? '\n\n' : ''
   const suffix = after.startsWith('\n') ? '' : '\n'
   const inserted = prefix + refMarkdown + suffix
-  notesStore.updateMarkdown(index, before + inserted + after)
+  const editor = sectionRefs[index]
+  if (editor?.insertAtCursor) {
+    editor.insertAtCursor(inserted)
+  } else {
+    notesStore.updateMarkdown(index, before + inserted + after)
+  }
   cursorState.value = { index, position: safePos + inserted.length }
-  nextTick(() => {
-    const ta = sectionRefs[index]
-    if (ta) {
-      autosize(ta)
-    }
-  })
 }
 
 // Add Image Modal state
@@ -145,7 +141,6 @@ onMounted(() => {
       if (imageObserver) imageObserver.observe(img)
       if (img.complete) recordImageHeight(img)
     })
-    sectionRefs.forEach(autosize)
   })
 })
 
@@ -184,54 +179,6 @@ function renderedSection(i) {
   const md = notesStore.results[i]?.markdown || ''
   if (!md) return ''
   return marked.parse(renderLatex(notesStore.resolveCropsForPreview(md)))
-}
-
-function onSectionInput(i, e) {
-  notesStore.updateMarkdown(i, e.target.value)
-  autosize(e.target)
-}
-
-function onSectionKeydown(i, e) {
-  if (e.key === 'Tab') {
-    e.preventDefault()
-    const textarea = e.target
-    const start = textarea.selectionStart
-    const end = textarea.selectionEnd
-    const value = textarea.value
-    const newValue = value.substring(0, start) + '  ' + value.substring(end)
-    notesStore.updateMarkdown(i, newValue)
-    nextTick(() => {
-      textarea.selectionStart = textarea.selectionEnd = start + 2
-      autosize(textarea)
-    })
-    return
-  }
-
-  if (e.key === 'ArrowDown') {
-    const textarea = e.target
-    const cursor = textarea.selectionStart
-    if (textarea.value.indexOf('\n', cursor) === -1) {
-      const next = sectionRefs[i + 1]
-      if (next) {
-        e.preventDefault()
-        next.focus()
-        next.selectionStart = next.selectionEnd = 0
-        next.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-      }
-    }
-  } else if (e.key === 'ArrowUp') {
-    const textarea = e.target
-    const cursor = textarea.selectionStart
-    if (textarea.value.lastIndexOf('\n', cursor - 1) === -1) {
-      const prev = sectionRefs[i - 1]
-      if (prev) {
-        e.preventDefault()
-        prev.focus()
-        prev.selectionStart = prev.selectionEnd = prev.value.length
-        prev.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-      }
-    }
-  }
 }
 
 function openLightbox(i) {
@@ -335,7 +282,6 @@ async function processAddImages() {
       if (imageObserver) imageObserver.observe(img)
       if (img.complete) recordImageHeight(img)
     })
-    sectionRefs.forEach(autosize)
   } catch (err) {
     addError.value = err.message || 'Failed to process images'
   } finally {
@@ -521,20 +467,17 @@ function closeAddModal() {
 
           <!-- Body: textarea (editor) or rendered HTML (preview) -->
           <div style="flex: 1; min-width: 0;">
-            <textarea
+            <CodeEditor
               v-show="viewMode === 'editor'"
               :ref="(el) => setSectionRef(i, el)"
-              :value="result.markdown"
-              @input="onSectionInput(i, $event)"
-              @keydown="onSectionKeydown(i, $event)"
-              @select="onTextareaSelect(i, $event)"
-              @click="onTextareaSelect(i, $event)"
-              @keyup="onTextareaSelect(i, $event)"
-              spellcheck="false"
+              :model-value="result.markdown"
               placeholder="Edit OCR text..."
-              :style="{ minHeight: imageHeights[i] ? imageHeights[i] + 'px' : '75vh' }"
-              style="width: 100%; padding: 12px 14px; font-family: ui-monospace, monospace; font-size: 14px; line-height: 1.6; background-color: var(--color-bg); color: var(--color-text-primary); border: 1px solid var(--color-border); border-radius: 8px; resize: none; outline: none; box-sizing: border-box; overflow: hidden;"
-            ></textarea>
+              :min-height="imageHeights[i] ? imageHeights[i] + 'px' : '75vh'"
+              @update:model-value="notesStore.updateMarkdown(i, $event)"
+              @select="cursorState = { index: i, position: $event }"
+              @arrow-up-out="focusPrevEditor(i)"
+              @arrow-down-out="focusNextEditor(i)"
+            />
             <div
               v-show="viewMode === 'preview'"
               class="markdown-preview"
